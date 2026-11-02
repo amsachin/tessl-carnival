@@ -95,6 +95,8 @@ const CONTAINER_TOP = 360;
 const SCOOP_RADIUS = 34;
 const SCOOP_SPACING = 42;
 const GRAVITY = 900;
+// The longest physics step, so a slow frame doesn't teleport the toppings.
+export const MAX_PHYSICS_STEP = 0.05;
 
 function pick<T>(items: readonly T[], random: () => number): T {
   return items[Math.min(Math.floor(random() * items.length), items.length - 1)];
@@ -293,10 +295,14 @@ export function serve(state: IceCreamState, random: () => number = Math.random):
   return points;
 }
 
-/** Advances the falling toppings and the customer's timer by `dt` seconds. */
-export function step(state: IceCreamState, dt: number): void {
+/**
+ * Advances the customer's timer by `dt` seconds, and the falling toppings by
+ * at most `MAX_PHYSICS_STEP`, so a slow frame still counts in full on the clock.
+ */
+export function step(state: IceCreamState, elapsedDt: number): void {
   if (state.phase !== 'playing') return;
-  state.elapsed += dt;
+  state.elapsed += elapsedDt;
+  const dt = Math.min(elapsedDt, MAX_PHYSICS_STEP);
   state.scoopAge += dt;
 
   for (const p of state.particles) {
@@ -425,6 +431,28 @@ export function press(
     case 'serve':
       return serve(state, random) !== null;
   }
+}
+
+/**
+ * Handles a click at (x, y) in canvas coordinates and returns the state to
+ * play on. A finished round is recorded right away, before a restart can
+ * replace it.
+ */
+export function tap(
+  state: IceCreamState,
+  x: number,
+  y: number,
+  record: (gameId: string, score: number) => unknown = recordScore,
+  random: () => number = Math.random,
+): IceCreamState {
+  if (state.phase === 'over') {
+    recordIfOver(state, record);
+    return createState(random);
+  }
+  const hit = buttonAt(x, y);
+  if (hit) press(state, hit.action, random);
+  recordIfOver(state, record);
+  return state;
 }
 
 function drawContainer(
@@ -601,32 +629,27 @@ export const iceCreamTent: CarnivalGame = {
     let state = createState();
 
     const onDown = (event: PointerEvent) => {
-      if (state.phase === 'over') {
-        state = createState();
-        return;
-      }
       const rect = canvas.getBoundingClientRect();
       const x = ((event.clientX - rect.left) / rect.width) * WIDTH;
       const y = ((event.clientY - rect.top) / rect.height) * HEIGHT;
-      const hit = buttonAt(x, y);
-      if (hit) press(state, hit.action);
+      state = tap(state, x, y);
     };
     canvas.addEventListener('pointerdown', onDown);
 
     let frame = 0;
     let last = performance.now();
     const loop = (time: number) => {
-      // Cap the step so a background tab doesn't teleport everything.
-      const dt = Math.min((time - last) / 1000, 0.05);
+      // step caps the physics itself; the customer's clock gets the real time.
+      const dt = Math.max(0, (time - last) / 1000);
       last = time;
       step(state, dt);
-      recordIfOver(state);
       draw(ctx, state);
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
 
     return () => {
+      recordIfOver(state);
       cancelAnimationFrame(frame);
       canvas.removeEventListener('pointerdown', onDown);
     };

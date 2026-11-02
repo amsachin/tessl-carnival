@@ -27,7 +27,8 @@ Each served order scores:
 - 10 points for the right cone or cup.
 - 10 points for each scoop with the right flavor in the right position.
 - 5 points for each right topping, and minus 5 for each topping that was not
-  ordered. These points never go below 0.
+  ordered. A wrong topping can take back container and scoop points too, but
+  these points together (container, scoops and toppings) never go below 0.
 - 20 bonus points for a perfect order: the right container, exactly the right
   scoops in order, and exactly the right toppings.
 - A speed bonus of up to 20 points, falling evenly to 0 over 20 seconds from
@@ -40,6 +41,6 @@ carnival's score board when the round ends.
 
 - `game.ts`: the game logic (`createOrder`, `createState`, `chooseContainer`,
   `addScoop`, `removeTopScoop`, `addTopping`, `step`, `scoreOrder`,
-  `speedBonus`, `serve`, `recordIfOver`, `buttonAt`, `press`) and the
+  `speedBonus`, `serve`, `recordIfOver`, `buttonAt`, `press`, `tap`) and the
   `iceCreamTent` entry, the default export the midway finds.
 - `game.test.ts`: tests for the game logic.

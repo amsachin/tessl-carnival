@@ -3,6 +3,7 @@ import {
   BUTTONS,
   CUSTOMERS_PER_ROUND,
   MAX_PARTICLES,
+  MAX_PHYSICS_STEP,
   MAX_SCOOPS,
   TOPPINGS,
   addScoop,
@@ -19,6 +20,7 @@ import {
   speedBonus,
   step,
   surfaceY,
+  tap,
   type Order,
 } from './game';
 
@@ -203,6 +205,37 @@ describe('ice cream tent', () => {
     expect(state.elapsed).toBe(0);
   });
 
+  it('counts a slow frame in full on the clock, but caps the physics step', () => {
+    const state = createState(fixed(0));
+    addTopping(state, 'cherry', fixed(0));
+    const cherry = state.particles[0];
+    const startY = cherry.y;
+    step(state, 0.5);
+    expect(state.elapsed).toBe(0.5);
+
+    const capped = createState(fixed(0));
+    addTopping(capped, 'cherry', fixed(0));
+    step(capped, MAX_PHYSICS_STEP);
+    expect(cherry.y).toBe(capped.particles[0].y);
+    expect(cherry.y).not.toBe(startY);
+  });
+
+  it('gives no speed bonus after 20 seconds of slow frames', () => {
+    const state = createState(fixed(0));
+    for (let i = 0; i < 200; i++) step(state, 0.1);
+    expect(speedBonus(state.elapsed)).toBe(0);
+  });
+
+  it('floors container, scoop and topping points together at 0', () => {
+    const plain: Order = { container: 'cone', scoops: ['vanilla'], toppings: [] };
+    const build = {
+      container: 'cone' as const,
+      scoops: ['vanilla' as const],
+      toppings: ['sprinkles' as const],
+    };
+    expect(scoreOrder(plain, build, 20)).toBe(15);
+  });
+
   it('serves the next customer straight away with a fresh build', () => {
     const state = createState(fixed(0));
     chooseContainer(state, 'cone');
@@ -231,6 +264,31 @@ describe('ice cream tent', () => {
     expect(recordIfOver(state, record)).toBe(false);
     expect(record).toHaveBeenCalledTimes(1);
     expect(record).toHaveBeenCalledWith('ice-cream-tent', state.score);
+  });
+
+  it('records a finished round on the click that ends it', () => {
+    const serveButton = BUTTONS.find((b) => b.action.kind === 'serve')!;
+    const record = vi.fn();
+    let state = createState(fixed(0));
+    for (let i = 0; i < CUSTOMERS_PER_ROUND; i++) {
+      state = tap(state, serveButton.x + 1, serveButton.y + 1, record, fixed(0));
+    }
+    expect(state.phase).toBe('over');
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith('ice-cream-tent', state.score);
+  });
+
+  it('records a finished round before a restart replaces it, and only once', () => {
+    const record = vi.fn();
+    const state = createState(fixed(0));
+    for (let i = 0; i < CUSTOMERS_PER_ROUND; i++) serve(state, fixed(0));
+    const next = tap(state, 5, 5, record, fixed(0));
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith('ice-cream-tent', state.score);
+    expect(next).not.toBe(state);
+    expect(next.phase).toBe('playing');
+    expect(recordIfOver(state, record)).toBe(false);
+    expect(record).toHaveBeenCalledTimes(1);
   });
 
   it('finds the button under the pointer, and presses it', () => {
