@@ -328,6 +328,18 @@ export function step(state: IceCreamState, elapsedDt: number): void {
   }
 }
 
+/**
+ * Brings the state's clock from `last` up to `now`, both in milliseconds, and
+ * returns the new `last`. `start` calls it on every frame and before every
+ * click, so a serve scores the full wait and the next customer starts from the
+ * click. The clock never runs backwards.
+ */
+export function advance(state: IceCreamState, last: number, now: number): number {
+  if (now <= last) return last;
+  step(state, (now - last) / 1000);
+  return now;
+}
+
 /** Records the score once, after the fifth customer. Returns true when it recorded. */
 export function recordIfOver(
   state: IceCreamState,
@@ -632,17 +644,17 @@ export const iceCreamTent: CarnivalGame = {
       const rect = canvas.getBoundingClientRect();
       const x = ((event.clientX - rect.left) / rect.width) * WIDTH;
       const y = ((event.clientY - rect.top) / rect.height) * HEIGHT;
+      // Bring the clock up to the click, so the time so far goes to this customer.
+      last = advance(state, last, performance.now());
       state = tap(state, x, y);
     };
-    canvas.addEventListener('pointerdown', onDown);
-
     let frame = 0;
     let last = performance.now();
+    canvas.addEventListener('pointerdown', onDown);
+
     const loop = (time: number) => {
       // step caps the physics itself; the customer's clock gets the real time.
-      const dt = Math.max(0, (time - last) / 1000);
-      last = time;
-      step(state, dt);
+      last = advance(state, last, time);
       draw(ctx, state);
       frame = requestAnimationFrame(loop);
     };

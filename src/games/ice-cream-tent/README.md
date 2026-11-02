@@ -41,6 +41,7 @@ carnival's score board when the round ends.
 
 - `game.ts`: the game logic (`createOrder`, `createState`, `chooseContainer`,
   `addScoop`, `removeTopScoop`, `addTopping`, `step`, `scoreOrder`,
-  `speedBonus`, `serve`, `recordIfOver`, `buttonAt`, `press`, `tap`) and the
+  `speedBonus`, `serve`, `advance`, `recordIfOver`, `buttonAt`, `press`,
+  `tap`) and the
   `iceCreamTent` entry, the default export the midway finds.
 - `game.test.ts`: tests for the game logic.

@@ -8,6 +8,7 @@ import {
   TOPPINGS,
   addScoop,
   addTopping,
+  advance,
   buttonAt,
   chooseContainer,
   createOrder,
@@ -289,6 +290,38 @@ describe('ice cream tent', () => {
     expect(next.phase).toBe('playing');
     expect(recordIfOver(state, record)).toBe(false);
     expect(record).toHaveBeenCalledTimes(1);
+  });
+
+  it('charges the time up to a serve to the customer served, not the next one', () => {
+    const serveButton = BUTTONS.find((b) => b.action.kind === 'serve')!;
+    let state = createState(fixed(0));
+    let last = advance(state, 0, 1000);
+    // 30 seconds pass with no frame, then the player serves.
+    last = advance(state, last, 31_000);
+    state = tap(state, serveButton.x + 1, serveButton.y + 1, vi.fn(), fixed(0));
+    expect(state.lastOrderScore).toBe(0);
+    expect(state.elapsed).toBe(0);
+    // The next frame charges the new customer only for the time since the serve.
+    advance(state, last, 31_016);
+    expect(state.elapsed).toBeCloseTo(0.016);
+    expect(speedBonus(state.elapsed)).toBe(20);
+  });
+
+  it('starts a restarted round at 0, whatever time passed on the game over screen', () => {
+    let state = createState(fixed(0));
+    for (let i = 0; i < CUSTOMERS_PER_ROUND; i++) serve(state, fixed(0));
+    const last = advance(state, 0, 60_000);
+    state = tap(state, 5, 5, vi.fn(), fixed(0));
+    expect(state.phase).toBe('playing');
+    expect(state.elapsed).toBe(0);
+    advance(state, last, 61_000);
+    expect(state.elapsed).toBe(1);
+  });
+
+  it('never runs the clock backwards', () => {
+    const state = createState(fixed(0));
+    expect(advance(state, 2000, 1500)).toBe(2000);
+    expect(state.elapsed).toBe(0);
   });
 
   it('finds the button under the pointer, and presses it', () => {
