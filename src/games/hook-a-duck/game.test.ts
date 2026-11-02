@@ -87,6 +87,32 @@ describe('hook-a-duck', () => {
     expect(state.hook.duck).toBeUndefined();
   });
 
+  it('catches the same duck however the frames fall across the bottom of the cast', () => {
+    for (const [frames, dt] of [
+      [16, 0.03],
+      [12, 0.04],
+    ] as const) {
+      const state = createState();
+      // Aim just inside reach of where the third duck will be when the hook lands.
+      const later = { ...state.ducks[2], angle: state.ducks[2].angle + DUCK_SPEED * CAST_SECONDS };
+      const target = duckPosition(later);
+      cast(state, target.x + CATCH_RADIUS - 1, target.y);
+      for (let i = 0; i < frames; i++) step(state, dt);
+      expect(state.ducks[2].caught).toBe(true);
+      expect(state.hook.phase).toBe('raising');
+      // The time past the bottom carries on into raising the hook.
+      expect(state.hook.t).toBeCloseTo(frames * dt - CAST_SECONDS);
+    }
+  });
+
+  it('carries a long frame through the whole cast', () => {
+    const state = createState();
+    cast(state, 400, 290);
+    step(state, CAST_SECONDS * 2 + 0.1);
+    expect(state.hook.phase).toBe('ready');
+    expect(state.hook.t).toBe(0);
+  });
+
   it('casts only once the hook is back up', () => {
     const state = createState();
     cast(state, 100, 300);

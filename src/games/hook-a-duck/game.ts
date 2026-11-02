@@ -117,34 +117,46 @@ export function catchAt(state: HookADuckState, x: number, y: number): Duck | und
   return best;
 }
 
-/** Advances the game by `dt` seconds. */
+function moveDucks(state: HookADuckState, dt: number): void {
+  for (const duck of state.ducks) {
+    if (!duck.caught) duck.angle = (duck.angle + DUCK_SPEED * dt) % (Math.PI * 2);
+  }
+}
+
+/**
+ * Advances the game by `dt` seconds. The frame is split where the hook
+ * reaches the bottom or the top, so a catch uses where the ducks are at that
+ * moment and the rest of the frame carries on into the next part of the cast.
+ */
 export function step(state: HookADuckState, dt: number): void {
   for (const reveal of state.reveals) reveal.age += dt;
   state.reveals = state.reveals.filter((r) => r.age < 1);
 
-  for (const duck of state.ducks) {
-    if (!duck.caught) duck.angle = (duck.angle + DUCK_SPEED * dt) % (Math.PI * 2);
-  }
-
-  if (state.phase !== 'playing') return;
-
-  const { hook } = state;
-  if (hook.phase === 'ready') return;
-  hook.t += dt;
-  if (hook.t < CAST_SECONDS) return;
-
-  if (hook.phase === 'lowering') {
-    hook.duck = catchAt(state, hook.x, hook.targetY);
-    hook.phase = 'raising';
+  let left = dt;
+  while (state.phase === 'playing' && state.hook.phase !== 'ready') {
+    const { hook } = state;
+    const toBoundary = CAST_SECONDS - hook.t;
+    if (left < toBoundary) {
+      moveDucks(state, left);
+      hook.t += left;
+      return;
+    }
+    moveDucks(state, toBoundary);
+    left -= toBoundary;
     hook.t = 0;
-    return;
-  }
 
-  // The hook is back up: the cast is over.
-  hook.phase = 'ready';
-  hook.t = 0;
-  hook.duck = undefined;
-  if (state.castsLeft === 0) state.phase = 'over';
+    if (hook.phase === 'lowering') {
+      hook.duck = catchAt(state, hook.x, hook.targetY);
+      hook.phase = 'raising';
+      continue;
+    }
+
+    // The hook is back up: the cast is over.
+    hook.phase = 'ready';
+    hook.duck = undefined;
+    if (state.castsLeft === 0) state.phase = 'over';
+  }
+  moveDucks(state, left);
 }
 
 function drawDuck(ctx: CanvasRenderingContext2D, x: number, y: number) {
